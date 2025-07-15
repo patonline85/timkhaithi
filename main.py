@@ -1,11 +1,11 @@
 # File: main.py (đã cập nhật cho deployment)
 import os
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse # Thêm HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from whoosh.index import open_dir
 from whoosh.qparser import QueryParser
-from whoosh.highlight import HtmlFormatter, Highlighter, WholeFragmenter # Thêm Highlighter và WholeFragmenter
+from whoosh.highlight import HtmlFormatter, Highlighter, WholeFragmenter
 
 app = FastAPI()
 
@@ -36,7 +36,8 @@ def search(search_query: SearchQuery):
         parser = QueryParser("content", ix.schema)
         query = parser.parse(search_query.query)
         results = searcher.search(query, limit=18) 
-        results.formatter = HtmlFormatter(tagname="strong")
+        # Sử dụng thẻ <mark> cho cả phần trích dẫn
+        results.formatter = HtmlFormatter(tagname="mark")
         for hit in results:
             highlighted_content = hit.highlights("content", top=2)
             results_list.append({
@@ -66,15 +67,18 @@ def get_document(filename: str = Query(..., min_length=1), query: str | None = Q
             qparser = QueryParser("content", ix.schema)
             q = qparser.parse(query)
             
-            # Thay đổi ở đây: Sử dụng inline style thay vì class CSS
-            formatter = HtmlFormatter(tagname="strong", attrs={"style": "background-color: #fef08a; padding: 0 2px;"})
+            # Thay đổi ở đây: Sử dụng thẻ <mark> đơn giản, không cần style
+            formatter = HtmlFormatter(tagname="mark")
             highlighter = Highlighter(formatter=formatter, fragmenter=WholeFragmenter())
             
             highlighted_content = highlighter.highlight_text(content, q)
-            return HTMLResponse(content=highlighted_content)
+            # Thay thế ký tự xuống dòng bằng thẻ <br> để trình duyệt hiển thị đúng
+            highlighted_content_with_breaks = highlighted_content.replace('\n', '<br>')
+            return HTMLResponse(content=highlighted_content_with_breaks)
         else:
-            # Nếu không có từ khóa, trả về văn bản thuần
-            return HTMLResponse(content=content)
+            # Nếu không có từ khóa, vẫn thay thế ký tự xuống dòng
+            content_with_breaks = content.replace('\n', '<br>')
+            return HTMLResponse(content=content_with_breaks)
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi đọc file: {e}")
