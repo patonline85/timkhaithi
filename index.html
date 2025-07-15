@@ -3,24 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tìm Kiếm Khai Thị Nâng Cao</title>
+    <title>Tìm Kiếm Tài Liệu Nâng Cao</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="bg-[#fffbbe] text-slate-800">
+<body class="bg-slate-100 text-slate-800">
 
     <div class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-slate-900">Trợ Lý Tìm Khai Thị</h1>
-            <p class="text-slate-600 mt-2">Đệ xin kính chào các Sư Huynh</p>
+            <h1 class="text-4xl font-bold text-slate-900">Công Cụ Tìm Kiếm Tài Liệu</h1>
+            <p class="text-slate-600 mt-2">Tìm kiếm trên kho tài liệu cá nhân của bạn</p>
         </header>
 
         <div class="max-w-2xl mx-auto">
             <div class="relative">
-                <input type="search" id="search-input" class="w-full p-4 pl-12 text-lg border border-slate-300 rounded-full shadow-sm focus:ring-2 focus:ring-blue-500 transition" placeholder="Mời Sư Huynh nhập từ khóa cần tìm ạ...">
+                <input type="search" id="search-input" class="w-full p-4 pl-12 text-lg border border-slate-300 rounded-full shadow-sm focus:ring-2 focus:ring-blue-500 transition" placeholder="Nhập từ khóa cần tìm...">
                 <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
                      <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
@@ -33,7 +33,7 @@
         </div>
     </div>
 
-    <!-- Cửa sổ Pop-up (Modal) được thiết kế lại hoàn toàn -->
+    <!-- Cửa sổ Pop-up (Modal) -->
     <div id="document-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
         <div class="bg-white rounded-lg shadow-2xl w-full max-w-4xl flex flex-col" style="max-height: 90vh;">
             <!-- Header -->
@@ -43,7 +43,7 @@
             </div>
             <!-- Body (Scrollable) -->
             <div class="p-6 overflow-y-auto flex-grow">
-                <pre id="modal-body" class="whitespace-pre-wrap font-sans text-slate-700"></pre>
+                <div id="modal-body" class="whitespace-pre-wrap font-sans text-slate-700"></div>
             </div>
             <!-- Footer with Buttons -->
             <div class="flex justify-end items-center p-4 border-t flex-shrink-0 space-x-4">
@@ -61,7 +61,7 @@
     <script>
         const searchInput = document.getElementById('search-input');
         const resultsContainer = document.getElementById('results-container');
-        const BACKEND_URL = ''; // Để trống vì frontend và backend cùng một địa chỉ
+        const BACKEND_URL = ''; // Để trống
 
         // --- Modal Elements ---
         const modal = document.getElementById('document-modal');
@@ -137,7 +137,8 @@
                 button.textContent = 'Đọc Toàn Bộ';
                 
                 button.addEventListener('click', () => {
-                    showDocument(result.filename);
+                    // Truyền thêm từ khóa tìm kiếm hiện tại
+                    showDocument(result.filename, searchInput.value.trim());
                 });
 
                 card.appendChild(title);
@@ -147,17 +148,18 @@
                 resultsContainer.appendChild(card);
             });
         }
-
-        // === HÀM SHOWDOCUMENT ĐÃ ĐƯỢC CẬP NHẬT ===
-        async function showDocument(filename) {
+        
+        async function showDocument(filename, query) {
             modalTitle.textContent = 'Đang tải...';
-            modalBody.textContent = '';
+            modalBody.innerHTML = ''; // Dùng innerHTML để xóa
             openModal();
 
             try {
                 const encodedFilename = encodeURIComponent(filename);
-                // Gửi tên file dưới dạng query parameter
-                const response = await fetch(`${BACKEND_URL}/document/?filename=${encodedFilename}`);
+                const encodedQuery = encodeURIComponent(query);
+                
+                // Gửi tên file và từ khóa dưới dạng query parameter
+                const response = await fetch(`${BACKEND_URL}/document/?filename=${encodedFilename}&query=${encodedQuery}`);
                 
                 if (!response.ok) {
                     let errorDetail = `Lỗi HTTP: ${response.status}`;
@@ -165,14 +167,14 @@
                         const errorData = await response.json();
                         errorDetail = errorData.detail || errorDetail;
                     } catch (e) {
-                        // Nếu không parse được JSON, lấy text
                         errorDetail = await response.text();
                     }
                     throw new Error(errorDetail);
                 }
                 const content = await response.text();
                 modalTitle.textContent = filename;
-                modalBody.textContent = content;
+                // Dùng innerHTML để hiển thị nội dung đã được highlight
+                modalBody.innerHTML = content;
             } catch (error) {
                 modalTitle.textContent = 'Lỗi';
                 modalBody.textContent = `Không thể tải tài liệu. Chi tiết: ${error.message}`;
@@ -190,6 +192,7 @@
         }
 
         function copyModalContent() {
+            // .textContent sẽ tự động loại bỏ các thẻ HTML, chỉ lấy chữ
             const textToCopy = modalBody.textContent;
             navigator.clipboard.writeText(textToCopy).then(() => {
                 const originalText = modalCopyBtn.textContent;
@@ -198,20 +201,6 @@
                 setTimeout(() => {
                     modalCopyBtn.textContent = originalText;
                     modalCopyBtn.disabled = false;
-                }, 2000);
-            }).catch(err => {
-                console.error('Không thể sao chép: ', err);
-                const tempTextArea = document.createElement('textarea');
-                tempTextArea.value = textToCopy;
-                document.body.appendChild(tempTextArea);
-                tempTextArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(tempTextArea);
-                
-                const originalText = modalCopyBtn.textContent;
-                modalCopyBtn.textContent = 'Đã sao chép!';
-                 setTimeout(() => {
-                    modalCopyBtn.textContent = originalText;
                 }, 2000);
             });
         }
