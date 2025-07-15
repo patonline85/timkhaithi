@@ -1,17 +1,16 @@
 # File: main.py (đã cập nhật cho deployment)
 import os
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse # Thay đổi ở đây
+# Thay đổi ở đây: Thêm PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse 
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
+# Không cần CORS nữa
+# from fastapi.middleware.cors import CORSMiddleware
 from whoosh.index import open_dir
 from whoosh.qparser import QueryParser
 from whoosh.highlight import HtmlFormatter
 
 app = FastAPI()
-
-# Không cần CORS nữa vì backend và frontend giờ là một
-# app.add_middleware(...)
 
 INDEX_DIR = "search_index"
 DATA_DIR = "data"
