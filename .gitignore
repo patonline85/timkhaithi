@@ -1,0 +1,10 @@
+# Bỏ qua thư mục chứa chỉ mục tìm kiếm (sẽ được tạo trên server)
+search_index/
+
+# Bỏ qua các file cache của Python
+__pycache__/
+*.pyc
+
+# Bỏ qua các file của môi trường ảo (nếu có)
+.venv/
+venv/

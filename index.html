@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tìm Kiếm Tài Liệu Nâng Cao</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-slate-900">Công Cụ Tìm Kiếm Tài Liệu</h1>
+            <p class="text-slate-600 mt-2">Tìm kiếm trên kho tài liệu cá nhân của bạn</p>
+        </header>
+
+        <div class="max-w-2xl mx-auto">
+            <div class="relative">
+                <input type="search" id="search-input" class="w-full p-4 pl-12 text-lg border border-slate-300 rounded-full shadow-sm focus:ring-2 focus:ring-blue-500 transition" placeholder="Nhập từ khóa cần tìm...">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                     <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Khu vực hiển thị kết quả dạng lưới -->
+        <div id="results-container" class="max-w-7xl mx-auto mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Kết quả tìm kiếm sẽ hiện ở đây -->
+        </div>
+    </div>
+
+    <!-- Cửa sổ Pop-up (Modal) được thiết kế lại hoàn toàn -->
+    <div id="document-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-4xl flex flex-col" style="max-height: 90vh;">
+            <!-- Header -->
+            <div class="flex justify-between items-center p-4 border-b flex-shrink-0">
+                <h3 id="modal-title" class="text-xl font-bold text-slate-800 truncate pr-4"></h3>
+                <button id="modal-close-btn" class="text-slate-400 hover:text-slate-800 text-3xl leading-none">&times;</button>
+            </div>
+            <!-- Body (Scrollable) -->
+            <div class="p-6 overflow-y-auto flex-grow">
+                <pre id="modal-body" class="whitespace-pre-wrap font-sans text-slate-700"></pre>
+            </div>
+            <!-- Footer with Buttons -->
+            <div class="flex justify-end items-center p-4 border-t flex-shrink-0 space-x-4">
+                <button id="modal-copy-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+                    Sao Chép
+                </button>
+                <button id="modal-close-btn-footer" class="bg-slate-200 text-slate-800 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-opacity-50">
+                    Đóng
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const searchInput = document.getElementById('search-input');
+        const resultsContainer = document.getElementById('results-container');
+        const BACKEND_URL = ''; // Để trống vì frontend và backend cùng một địa chỉ
+
+        // --- Modal Elements ---
+        const modal = document.getElementById('document-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        const modalCopyBtn = document.getElementById('modal-copy-btn');
+        const modalCloseBtnFooter = document.getElementById('modal-close-btn-footer');
+
+        // --- Event Listeners ---
+        let debounceTimer;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const query = searchInput.value.trim();
+                if (query.length >= 2) {
+                    performSearch(query);
+                } else {
+                    resultsContainer.innerHTML = '<p class="col-span-full text-center text-slate-500">Gõ ít nhất 2 ký tự để tìm kiếm.</p>';
+                }
+            }, 300);
+        });
+
+        modalCloseBtn.addEventListener('click', closeModal);
+        modalCloseBtnFooter.addEventListener('click', closeModal);
+        modalCopyBtn.addEventListener('click', copyModalContent);
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                closeModal();
+            }
+        });
+
+        // --- Core Functions ---
+        async function performSearch(query) {
+            resultsContainer.innerHTML = `<p class="col-span-full text-center text-slate-500">Đang tìm kiếm...</p>`;
+            try {
+                const response = await fetch(`${BACKEND_URL}/search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                const results = await response.json();
+                displayResults(results);
+            } catch (error) {
+                resultsContainer.innerHTML = `<p class="col-span-full text-center text-red-500">Lỗi: Không thể kết nối đến backend.</p>`;
+            }
+        }
+
+        function displayResults(results) {
+            resultsContainer.innerHTML = '';
+
+            if (!results || results.length === 0) {
+                resultsContainer.innerHTML = '<p class="col-span-full text-center text-slate-500">Không tìm thấy kết quả nào.</p>';
+                return;
+            }
+
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = "bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col";
+
+                const title = document.createElement('h3');
+                title.className = "text-lg font-bold text-blue-700 mb-2 overflow-hidden text-ellipsis whitespace-nowrap";
+                title.textContent = result.filename;
+                title.title = result.filename;
+
+                const snippet = document.createElement('div');
+                snippet.className = "text-slate-600 text-sm mb-4 flex-grow prose prose-sm max-w-none";
+                snippet.innerHTML = result.content_snippet;
+
+                const button = document.createElement('button');
+                button.className = "mt-auto bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors self-start focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50";
+                button.textContent = 'Đọc Toàn Bộ';
+                
+                button.addEventListener('click', () => {
+                    showDocument(result.filename);
+                });
+
+                card.appendChild(title);
+                card.appendChild(snippet);
+                card.appendChild(button);
+
+                resultsContainer.appendChild(card);
+            });
+        }
+
+        // === HÀM SHOWDOCUMENT ĐÃ ĐƯỢC CẬP NHẬT ===
+        async function showDocument(filename) {
+            modalTitle.textContent = 'Đang tải...';
+            modalBody.textContent = '';
+            openModal();
+
+            try {
+                const encodedFilename = encodeURIComponent(filename);
+                // Gửi tên file dưới dạng query parameter
+                const response = await fetch(`${BACKEND_URL}/document/?filename=${encodedFilename}`);
+                
+                if (!response.ok) {
+                    let errorDetail = `Lỗi HTTP: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorDetail = errorData.detail || errorDetail;
+                    } catch (e) {
+                        // Nếu không parse được JSON, lấy text
+                        errorDetail = await response.text();
+                    }
+                    throw new Error(errorDetail);
+                }
+                const content = await response.text();
+                modalTitle.textContent = filename;
+                modalBody.textContent = content;
+            } catch (error) {
+                modalTitle.textContent = 'Lỗi';
+                modalBody.textContent = `Không thể tải tài liệu. Chi tiết: ${error.message}`;
+            }
+        }
+
+        function openModal() {
+            modal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        function copyModalContent() {
+            const textToCopy = modalBody.textContent;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = modalCopyBtn.textContent;
+                modalCopyBtn.textContent = 'Đã sao chép!';
+                modalCopyBtn.disabled = true;
+                setTimeout(() => {
+                    modalCopyBtn.textContent = originalText;
+                    modalCopyBtn.disabled = false;
+                }, 2000);
+            }).catch(err => {
+                console.error('Không thể sao chép: ', err);
+                const tempTextArea = document.createElement('textarea');
+                tempTextArea.value = textToCopy;
+                document.body.appendChild(tempTextArea);
+                tempTextArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempTextArea);
+                
+                const originalText = modalCopyBtn.textContent;
+                modalCopyBtn.textContent = 'Đã sao chép!';
+                 setTimeout(() => {
+                    modalCopyBtn.textContent = originalText;
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
