@@ -67,7 +67,7 @@ def get_document(filename: str = Query(..., min_length=1), query: str | None = Q
             qparser = QueryParser("content", ix.schema)
             q = qparser.parse(query)
             
-            # Thay đổi ở đây: Sử dụng thẻ <mark> đơn giản, không cần style
+            # Sửa lỗi: Sử dụng thẻ <mark> đơn giản, không có tham số 'attrs'
             formatter = HtmlFormatter(tagname="mark")
             highlighter = Highlighter(formatter=formatter, fragmenter=WholeFragmenter())
             
