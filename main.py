@@ -1,11 +1,12 @@
 # File: main.py (đã cập nhật cho deployment)
 import os
+import re # Thêm thư viện regex
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from whoosh.index import open_dir
 from whoosh.qparser import QueryParser
-from whoosh.highlight import HtmlFormatter, Highlighter, WholeFragmenter
+from whoosh.highlight import HtmlFormatter
 
 app = FastAPI()
 
@@ -45,45 +46,43 @@ def search(search_query: SearchQuery):
             })
     return results_list
 
-# === API ĐỌC FILE ĐÃ ĐƯỢC NÂNG CẤP ĐỂ HIGHLIGHT ===
+# === API ĐỌC FILE VỚI LOGIC HIGHLIGHT ĐƯỢC SỬA LẠI HOÀN TOÀN ===
 @app.get("/document/")
 def get_document(filename: str = Query(..., min_length=1), query: str | None = Query(None)):
-    requested_path = os.path.join(ABS_DATA_DIR, filename)
-    real_path = os.path.realpath(requested_path)
-    
-    if not real_path.startswith(ABS_DATA_DIR):
-        raise HTTPException(status_code=400, detail="Truy cập file không hợp lệ.")
-
-    if not os.path.exists(real_path):
-        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu.")
-
+    # --- Step 1: Get the document content safely ---
     try:
+        real_path = os.path.join(ABS_DATA_DIR, filename)
+        if not os.path.realpath(real_path).startswith(ABS_DATA_DIR):
+             raise HTTPException(status_code=400, detail="Truy cập file không hợp lệ.")
         with open(real_path, "r", encoding="utf-8") as f:
             content = f.read()
-        
-        # Nếu có từ khóa tìm kiếm, thực hiện làm nổi bật
-        if query and ix:
-            qparser = QueryParser("content", ix.schema)
-            q = qparser.parse(query)
-            
-            formatter = HtmlFormatter(tagname="mark")
-            # Sửa lỗi: Sử dụng phương thức highlight() cũ hơn và tương thích hơn
-            highlighter = Highlighter(formatter=formatter)
-            
-            # Trích xuất các từ khóa từ câu truy vấn
-            terms = {term for fieldname, term in q.all_terms() if fieldname == "content"}
-            
-            # Sử dụng phương thức highlight() thay vì highlight_text()
-            highlighted_content = highlighter.highlight(content, terms, WholeFragmenter())
-            
-            highlighted_content_with_breaks = highlighted_content.replace('\n', '<br>')
-            return HTMLResponse(content=highlighted_content_with_breaks)
-        else:
-            content_with_breaks = content.replace('\n', '<br>')
-            return HTMLResponse(content=content_with_breaks)
-            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi đọc file: {e}")
+
+    # --- Step 2: Highlight the content if a query is provided ---
+    highlighted_content = content
+    if query and ix:
+        try:
+            qparser = QueryParser("content", ix.schema)
+            q_obj = qparser.parse(query)
+            
+            # Lấy các từ khóa từ câu truy vấn
+            terms = {term.decode('utf-8') if isinstance(term, bytes) else term for fieldname, term in q_obj.all_terms() if fieldname == "content"}
+            
+            # Tự làm nổi bật bằng regex để đảm bảo hoạt động
+            temp_content = content
+            for term in terms:
+                # re.escape để xử lý ký tự đặc biệt, \b để khớp toàn bộ từ
+                regex = re.compile(r'\b(' + re.escape(term) + r')\b', re.IGNORECASE)
+                temp_content = regex.sub(r'<mark>\1</mark>', temp_content)
+            highlighted_content = temp_content
+        except Exception:
+            # Nếu highlight thất bại, vẫn trả về nội dung gốc
+            pass
+            
+    # --- Step 3: Format for HTML and return ---
+    content_with_breaks = highlighted_content.replace('\n', '<br>')
+    return HTMLResponse(content=content_with_breaks)
 
 
 # API phục vụ giao diện
