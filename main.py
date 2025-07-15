@@ -1,14 +1,11 @@
 # File: main.py (đã cập nhật cho deployment)
 import os
 from fastapi import FastAPI, HTTPException, Query
-# Thay đổi ở đây: Thêm PlainTextResponse
-from fastapi.responses import FileResponse, PlainTextResponse 
+from fastapi.responses import FileResponse, HTMLResponse # Thêm HTMLResponse
 from pydantic import BaseModel
-# Không cần CORS nữa
-# from fastapi.middleware.cors import CORSMiddleware
 from whoosh.index import open_dir
 from whoosh.qparser import QueryParser
-from whoosh.highlight import HtmlFormatter
+from whoosh.highlight import HtmlFormatter, Highlighter, WholeFragmenter # Thêm Highlighter và WholeFragmenter
 
 app = FastAPI()
 
@@ -17,7 +14,6 @@ DATA_DIR = "data"
 ABS_DATA_DIR = os.path.realpath(DATA_DIR)
 
 ix = None
-# Kiểm tra xem thư mục chỉ mục có tồn tại không
 if os.path.exists(INDEX_DIR):
     try:
         ix = open_dir(INDEX_DIR)
@@ -49,23 +45,41 @@ def search(search_query: SearchQuery):
             })
     return results_list
 
+# === API ĐỌC FILE ĐÃ ĐƯỢC NÂNG CẤP ĐỂ HIGHLIGHT ===
 @app.get("/document/")
-def get_document(filename: str = Query(..., min_length=1)):
+def get_document(filename: str = Query(..., min_length=1), query: str | None = Query(None)):
     requested_path = os.path.join(ABS_DATA_DIR, filename)
     real_path = os.path.realpath(requested_path)
+    
     if not real_path.startswith(ABS_DATA_DIR):
         raise HTTPException(status_code=400, detail="Truy cập file không hợp lệ.")
+
     if not os.path.exists(real_path):
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu.")
+
     try:
         with open(real_path, "r", encoding="utf-8") as f:
             content = f.read()
-        return PlainTextResponse(content=content)
+        
+        # Nếu có từ khóa tìm kiếm, thực hiện làm nổi bật
+        if query and ix:
+            qparser = QueryParser("content", ix.schema)
+            q = qparser.parse(query)
+            
+            formatter = HtmlFormatter(tagname="strong", classname="bg-yellow-200")
+            highlighter = Highlighter(formatter=formatter, fragmenter=WholeFragmenter())
+            
+            highlighted_content = highlighter.highlight_text(content, q)
+            return HTMLResponse(content=highlighted_content)
+        else:
+            # Nếu không có từ khóa, trả về văn bản thuần
+            return HTMLResponse(content=content)
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi đọc file: {e}")
 
-# === API MỚI ĐỂ PHỤC VỤ GIAO DIỆN ===
-# Route này phải được đặt ở cuối cùng
+
+# API phục vụ giao diện
 @app.get("/")
 async def read_root():
     return FileResponse('index.html')
