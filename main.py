@@ -66,7 +66,8 @@ def get_document(filename: str = Query(..., min_length=1), query: str | None = Q
             qparser = QueryParser("content", ix.schema)
             q = qparser.parse(query)
             
-            formatter = HtmlFormatter(tagname="strong", classname="bg-yellow-200")
+            # Thay đổi ở đây: Sử dụng inline style thay vì class CSS
+            formatter = HtmlFormatter(tagname="strong", attrs={"style": "background-color: #fef08a; padding: 0 2px;"})
             highlighter = Highlighter(formatter=formatter, fragmenter=WholeFragmenter())
             
             highlighted_content = highlighter.highlight_text(content, q)
