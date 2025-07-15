@@ -36,7 +36,6 @@ def search(search_query: SearchQuery):
         parser = QueryParser("content", ix.schema)
         query = parser.parse(search_query.query)
         results = searcher.search(query, limit=18) 
-        # Sử dụng thẻ <mark> cho cả phần trích dẫn
         results.formatter = HtmlFormatter(tagname="mark")
         for hit in results:
             highlighted_content = hit.highlights("content", top=2)
@@ -67,16 +66,19 @@ def get_document(filename: str = Query(..., min_length=1), query: str | None = Q
             qparser = QueryParser("content", ix.schema)
             q = qparser.parse(query)
             
-            # Sửa lỗi: Sử dụng thẻ <mark> đơn giản, không có tham số 'attrs'
             formatter = HtmlFormatter(tagname="mark")
-            highlighter = Highlighter(formatter=formatter, fragmenter=WholeFragmenter())
+            # Sửa lỗi: Sử dụng phương thức highlight() cũ hơn và tương thích hơn
+            highlighter = Highlighter(formatter=formatter)
             
-            highlighted_content = highlighter.highlight_text(content, q)
-            # Thay thế ký tự xuống dòng bằng thẻ <br> để trình duyệt hiển thị đúng
+            # Trích xuất các từ khóa từ câu truy vấn
+            terms = {term for fieldname, term in q.all_terms() if fieldname == "content"}
+            
+            # Sử dụng phương thức highlight() thay vì highlight_text()
+            highlighted_content = highlighter.highlight(content, terms, WholeFragmenter())
+            
             highlighted_content_with_breaks = highlighted_content.replace('\n', '<br>')
             return HTMLResponse(content=highlighted_content_with_breaks)
         else:
-            # Nếu không có từ khóa, vẫn thay thế ký tự xuống dòng
             content_with_breaks = content.replace('\n', '<br>')
             return HTMLResponse(content=content_with_breaks)
             
