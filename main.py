@@ -1,24 +1,20 @@
 # File: main.py (đã cập nhật cho deployment)
 import os
+import re # Thêm thư viện regex
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse # Thay đổi ở đây
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
 from whoosh.index import open_dir
 from whoosh.qparser import QueryParser
 from whoosh.highlight import HtmlFormatter
 
 app = FastAPI()
 
-# Không cần CORS nữa vì backend và frontend giờ là một
-# app.add_middleware(...)
-
 INDEX_DIR = "search_index"
 DATA_DIR = "data"
 ABS_DATA_DIR = os.path.realpath(DATA_DIR)
 
 ix = None
-# Kiểm tra xem thư mục chỉ mục có tồn tại không
 if os.path.exists(INDEX_DIR):
     try:
         ix = open_dir(INDEX_DIR)
@@ -41,7 +37,7 @@ def search(search_query: SearchQuery):
         parser = QueryParser("content", ix.schema)
         query = parser.parse(search_query.query)
         results = searcher.search(query, limit=18) 
-        results.formatter = HtmlFormatter(tagname="strong")
+        results.formatter = HtmlFormatter(tagname="mark")
         for hit in results:
             highlighted_content = hit.highlights("content", top=2)
             results_list.append({
@@ -50,23 +46,46 @@ def search(search_query: SearchQuery):
             })
     return results_list
 
+# === API ĐỌC FILE VỚI LOGIC HIGHLIGHT ĐƯỢC SỬA LẠI HOÀN TOÀN ===
 @app.get("/document/")
-def get_document(filename: str = Query(..., min_length=1)):
-    requested_path = os.path.join(ABS_DATA_DIR, filename)
-    real_path = os.path.realpath(requested_path)
-    if not real_path.startswith(ABS_DATA_DIR):
-        raise HTTPException(status_code=400, detail="Truy cập file không hợp lệ.")
-    if not os.path.exists(real_path):
-        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu.")
+def get_document(filename: str = Query(..., min_length=1), query: str | None = Query(None)):
+    # --- Step 1: Get the document content safely ---
     try:
+        real_path = os.path.join(ABS_DATA_DIR, filename)
+        if not os.path.realpath(real_path).startswith(ABS_DATA_DIR):
+             raise HTTPException(status_code=400, detail="Truy cập file không hợp lệ.")
         with open(real_path, "r", encoding="utf-8") as f:
             content = f.read()
-        return PlainTextResponse(content=content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi khi đọc file: {e}")
 
-# === API MỚI ĐỂ PHỤC VỤ GIAO DIỆN ===
-# Route này phải được đặt ở cuối cùng
+    # --- Step 2: Highlight the content if a query is provided ---
+    highlighted_content = content
+    if query and ix:
+        try:
+            qparser = QueryParser("content", ix.schema)
+            q_obj = qparser.parse(query)
+            
+            # Lấy các từ khóa từ câu truy vấn
+            terms = {term.decode('utf-8') if isinstance(term, bytes) else term for fieldname, term in q_obj.all_terms() if fieldname == "content"}
+            
+            # Tự làm nổi bật bằng regex để đảm bảo hoạt động
+            temp_content = content
+            for term in terms:
+                # re.escape để xử lý ký tự đặc biệt, \b để khớp toàn bộ từ
+                regex = re.compile(r'\b(' + re.escape(term) + r')\b', re.IGNORECASE)
+                temp_content = regex.sub(r'<mark>\1</mark>', temp_content)
+            highlighted_content = temp_content
+        except Exception:
+            # Nếu highlight thất bại, vẫn trả về nội dung gốc
+            pass
+            
+    # --- Step 3: Format for HTML and return ---
+    content_with_breaks = highlighted_content.replace('\n', '<br>')
+    return HTMLResponse(content=content_with_breaks)
+
+
+# API phục vụ giao diện
 @app.get("/")
 async def read_root():
     return FileResponse('index.html')
